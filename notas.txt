@@ -1,1 +1,4 @@
 $SPARK_HOME/bin/spark-submit --class com.gft.realtimemlanalytics.WordCount ./target/scala-2.11/gftrealtimemlanalytics_2.11-0.0.1.jar ./README.md ./wordcounts
+
+
+-Dspark.master=local
