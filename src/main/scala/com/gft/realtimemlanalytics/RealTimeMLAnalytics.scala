@@ -5,7 +5,7 @@ package com.gft.realtimemlanalytics
 
 import org.apache.spark._
 
-object WordCount {
+object RealTimeMLAnalytics {
     def main(args: Array[String]) {
       val inputFile = args(0)
       val outputFile = args(1)
@@ -20,6 +20,6 @@ object WordCount {
       val counts = words.map(word => (word, 1)).reduceByKey{case (x, y) => x + y}
       // Save the word count back out to a text file, causing evaluation.
       counts.saveAsTextFile(outputFile)
-      
+
     }
 }
