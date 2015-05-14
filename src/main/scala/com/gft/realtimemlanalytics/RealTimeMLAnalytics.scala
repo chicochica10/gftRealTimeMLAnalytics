@@ -3,11 +3,12 @@
  */
 package com.gft.realtimemlanalytics
 
+import java.lang.System._
+
 import org.apache.spark._
-import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import org.apache.spark.mllib.clustering._
+import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import org.apache.spark.rdd.RDD
-import System._
 
 object RealTimeMLAnalytics {
   def main(args: Array[String]) {
@@ -16,6 +17,7 @@ object RealTimeMLAnalytics {
 
 
     val conf = new SparkConf().setAppName("realTimeMLAnalytics")
+
     // Create a Scala Spark Context.
     val sc = new SparkContext(conf)
     // Load our input data.
@@ -66,7 +68,8 @@ object RealTimeMLAnalytics {
     //0,icmp,ecr_i,SF,1032,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,316,316,0.00,0.00,0.00,0.00,1.00,0.00,0.00,148,3,0.02,0.02,0.02,0.00,0.00,0.00,0.00,0.00,smurf.
 
     // deleting categorical variables and creating pairs label,values
-    val labelsAndData = rawData.map { line =>
+
+    /*val labelsAndData = rawData.map { line =>
       //toBuffer creates a mutable list !!!
       val buffer = line.split(',').toBuffer
       buffer.remove(1, 3)
@@ -75,7 +78,78 @@ object RealTimeMLAnalytics {
       // convert buffer os string to array of doubles
       val vector = Vectors.dense(buffer.map(_.toDouble).toArray)
       (label, vector)
+    }*/
+
+
+    //using categorical variables
+    def buildCategoricalAndLabel: (String => (String, Vector)) = {
+
+      val splitData = rawData.map(_.split(',')) //RDD [Array[String]]
+
+      //1,tcp,smtp,SF,950,493,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,2,1,0.00,0.00,0.00,0.00,0.50,1.00,0.00,138,243,0.95,0.01,0.01,0.01,0.00,0.00,0.00,0.00,normal.
+      //0,icmp,ecr_i,SF,1032,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,316,316,0.00,0.00,0.00,0.00,1.00,0.00,0.00,148,3,0.02,0.02,0.02,0.00,0.00,0.00,0.00,0.00,smurf.
+      //splitData.map (_(1)).foreach(println)
+      //tcp
+      //tcp
+      //icmp
+      //splitData.map (_(1)).distinct.foreach(println)
+      //tcp
+      //icmp
+      //splitData.map (_(1)).distinct.collect
+      //Array (icmp, tcp)
+      //splitData.map (_(1)).distinct.collect.zipWithIndex
+      //Array((icmp,0), (tcp,1))
+
+      val protocols = splitData.map(_(1)).distinct.collect.zipWithIndex.toMap // Map(icmp -> 0, tcp -> 1)
+      val services = splitData.map(_(2)).distinct.collect.zipWithIndex.toMap
+      val tcpStates = splitData.map(_(3)).distinct.collect.zipWithIndex.toMap
+
+      println(s"---> protocols ${protocols.size}")
+      protocols.foreach(println)
+      println(s"---> services ${services.size}")
+      services.foreach(println)
+      println(s"---> tcpStates ${tcpStates.size}")
+      tcpStates.foreach(println)
+
+      /* tcpStates 9
+      (S1,8)
+      (RSTR,5)
+      (REJ,4)
+      (S0,0)
+      (RSTOS0,2)
+      (SH,6)
+      (SF,1)
+      (RSTO,7)
+      (S2,3)
+       */
+
+      (line: String) => {
+        val buffer = line.split(',').toBuffer
+        val protocol = buffer.remove(1)
+        val service = buffer.remove(1)
+        val tcpState = buffer.remove(1)
+        val label = buffer.remove(buffer.length - 1)
+        val bufferData = buffer.map(_.toDouble)
+
+        //mutables...
+        val newProtocolFeatures = new Array[Double](protocols.size)
+        newProtocolFeatures(protocols(protocol)) = 1.0
+        val newServiceFeatures = new Array[Double](services.size)
+        newServiceFeatures(services(service)) = 1.0
+        val newTcpStateFeatures = new Array[Double](tcpStates.size)
+        newTcpStateFeatures(tcpStates(tcpState)) = 1.0
+
+        bufferData.insertAll(1, newTcpStateFeatures)
+        bufferData.insertAll(1, newServiceFeatures)
+        bufferData.insertAll(1, newProtocolFeatures)
+        val vector = Vectors.dense(bufferData.toArray)
+        (label, vector)
+        //lb
+        //81, 4173.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,147.0,105.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,4.0,2.0,0.0,0.0,0.0,0.0,0.5,0.5,0.0,255.0,2.0,0.01,0.84,1.0,0.0,0.0,0.0,0.0,0.0
+      }
     }
+
+    val labelsAndData = rawData.map(buildCategoricalAndLabel)
 
     //(smurf.,[0.0,1032.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,511.0,511.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,255.0,255.0,1.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0])
     //(teardrop.,[0.0,28.0,0.0,0.0,3.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,34.0,34.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,255.0,1.0,0.0,0.01,0.0,0.0,0.0,0.0,0.0,0.0])
@@ -83,15 +157,17 @@ object RealTimeMLAnalytics {
     //save the values only
     /*
     The call to cache() suggests to Spark that this RDD should be temporarily stored
-after being computed, and furthermore, kept in memory in the cluster. This is helpful
-because the ALS algorithm is iterative, and will typically need to access this data 10
-times or more. Without this, the RDD could be repeatedly recomputed from the orig‐
-inal data each time it is accessed!
+    after being computed, and furthermore, kept in memory in the cluster. This is helpful
+    because the ALS algorithm is iterative, and will typically need to access this data 10
+    times or more. Without this, the RDD could be repeatedly recomputed from the orig‐
+    inal data each time it is accessed!
      */
-    val data = labelsAndData.values.cache()
+    //val data = labelsAndData.values.cache()
+
+
     //data.foreach(println)
 
-   // val kmeans = new KMeans()
+    // val kmeans = new KMeans()
     // creating a model with K=2 as default
     //org.apache.spark.mllib.clustering.KMeansModel
     //val model = kmeans.run(data)
@@ -169,14 +245,14 @@ inal data each time it is accessed!
     centroid:
      */
 
-    def distance (a: Vector, b:Vector) = {
-        math.sqrt(a.toArray.zip(b.toArray).map (p => p._2 - p._1).map(d => d * d).sum)
+    def distance(a: Vector, b: Vector) = {
+      math.sqrt(a.toArray.zip(b.toArray).map(p => p._2 - p._1).map(d => d * d).sum)
     }
 
-    def distanceToCentroid (datum: Vector, model: KMeansModel) ={
-      val cluster = model.predict (datum)
+    def distanceToCentroid(datum: Vector, model: KMeansModel) = {
+      val cluster = model.predict(datum)
       val centroid = model.clusterCenters(cluster)
-      distance (centroid, datum)
+      distance(centroid, datum)
     }
     //take => Array[Double]
     //data.map(datum => distanceToCentroid(datum, model)).take(10).foreach(println)
@@ -204,11 +280,13 @@ inal data each time it is accessed!
     }
 
     //lets create a function that measures the average distance to centroid, for a model built with a given k:
-    def clusteringScore (data: RDD[Vector], k: Int) = {
+   /* def clusteringScore(data: RDD[Vector], k: Int) = {
       val model: KMeansModel = runKmeans(data, k)
-      val distances = data.map (datum => distanceToCentroid(datum,model)) //RDD [Double]
+      val distances = data.map(datum => distanceToCentroid(datum, model)) //RDD [Double]
       distances.mean
-    }
+    }*/
+
+
 
     //(5 to 40 by 5).map (k => (k,clusteringScore(data, k))).foreach (println)
     /* score decreases as k increases but K-means is not necessarily able to find the optimal clustering for a given k.
@@ -245,6 +323,7 @@ inal data each time it is accessed!
 
     //the range from 30 to 100 is turned into a parallel collection in Scala. This causes
     //the computation for each k to happen in parallel in Spark
+
     //(30 to 200 by 10).par.map (k => (k,clusteringScore(data, k))).toList.foreach (println)
     /* for 20000 entries from 30 to 100 by 10
     (30,185.26588425078768)
@@ -258,7 +337,7 @@ inal data each time it is accessed!
     time taken: 53.572641739 sec.
      */
 
-    /* for 50000 entreies from 30 to 200 by 10*/
+    /* for 50000 entries from 30 to 200 by 10*/
     /*
     (30,276.82214276062786)
     (40,154.87436185640516)
@@ -280,25 +359,194 @@ inal data each time it is accessed!
     (200,29.10443049867585)
      */
 
-     val estimatedNanoTime = (nanoTime - startNanoTime) /   1000000000.0
-    println (s"time taken: $estimatedNanoTime sec.")
+    // val estimatedNanoTime = (nanoTime - startNanoTime) /   1000000000.0
+    // println (s"time taken: $estimatedNanoTime sec.")
 
     // we need to find a point past which increasing k stops reducing the score much...
     // an "elbow" in a grpah of k vs. scores
     // past k = 100 scores reduces slowly
     // let's take a sample for R
-    def saveSample () ={
-      val model: KMeansModel = runKmeans(data, 100)
-      val sample = data.map (datum => model.predict(datum) + "," + datum.toArray.mkString(","))
+    def saveDataWithKmeans(theData: RDD[Vector], k: Int) = {
+      val model: KMeansModel = runKmeans(theData, k)
+      val sample = theData.map(datum => model.predict(datum) + "," + datum.toArray.mkString(","))
       // not necessary get a sample because is already sampled
       //.sample (false, 0.05) <- get 5% of the data RDD
-      sample.saveAsTextFile("./anomalies")
+      sample.saveAsTextFile(outputFile)
     }
 
-    saveSample
+    // saveDataWithKmeans(data, 100)
+
+    /*
+      the dominant feature of the visualization is its “L” shape. The
+      points seem to vary along two distinct dimensions, and little in other dimensions.
+      This makes sense, because the data set has two features that are on a much larger scale
+      than the others. Whereas most features have values between 0 and 1, the bytes-sent
+      and bytes-received features vary from 0 to tens of thousands. The Euclidean distance
+      between points is therefore almost completely determined by these two features. It’s
+      almost as if the other features don’t exist! So, it’s important to normalize away these
+      differences in scale to put features on near-equal footing.
+    */
+
+    //Normalization
+    /*
+      normalized(i) = feature(i) - mean(i) / standard_desviation (i)
+     */
+
+
+    /*def normalize(datum: Vector) = {
+
+      val dataAsArray = data.map(_.toArray)
+      val numCols = dataAsArray.first().length
+      val n = dataAsArray.count()
+      val sums = dataAsArray.reduce((x, y) => x.zip(y).map(p => p._1 + p._2)) //Array [Double] pag. 42 learning spark
+
+      val sumSquares = dataAsArray.fold(new Array[Double](numCols))(//pag. 42 learning spark
+        (x, y) => x.zip(y).map(p => p._1 + p._2 * p._2)
+      )
+
+      val stdevs = sumSquares.zip(sums).map {
+        //Array[Double]
+        case (sumSq, sum) => math.sqrt(n * sumSq - sum * sum) / n
+      }
+
+      val means = sums.map(_ / n) //Array[Double]
+
+
+      val normalizedArray = (datum.toArray, means, stdevs).zipped.map {
+        case (value, mean, stdev) =>
+          if (stdev <= 0) value - mean else (value - mean) / stdev
+      }
+      Vectors.dense(normalizedArray)
+    }*/
+
+    def normalize(data: RDD[Vector]): (Vector => Vector) = {
+
+      val dataAsArray = data.map(_.toArray)
+      val numCols = dataAsArray.first().length
+      val n = dataAsArray.count()
+      val sums = dataAsArray.reduce((x, y) => x.zip(y).map(p => p._1 + p._2)) //Array [Double] pag. 42 learning spark
+
+      val sumSquares = dataAsArray.fold(new Array[Double](numCols))(//pag. 42 learning spark
+        (x, y) => x.zip(y).map(p => p._1 + p._2 * p._2)
+      )
+
+      val stdevs = sumSquares.zip(sums).map {
+        //Array[Double]
+        case (sumSq, sum) => math.sqrt(n * sumSq - sum * sum) / n
+      }
+
+      val means = sums.map(_ / n) //Array[Double]
+
+      datum => {
+        val normalizedArray = (datum.toArray, means, stdevs).zipped.map {
+          case (value, mean, stdev) =>
+            if (stdev <= 0) value - mean else (value - mean) / stdev
+        }
+        Vectors.dense(normalizedArray)
+      }
+    }
+
+
+
+    // choosing k with normalized data
+
+    val normalizedData = labelsAndData.mapValues(normalize(labelsAndData.values)).cache()
+    //(30 to 200 by 10).par.map(k => (k, clusteringScore(normalizedData, k))).toList.foreach(println)
+
+
+    /* for 50000 entries from 30 to 200 by 10
+    (30,0.01399495169120432)
+    (40,0.009340735885523622)
+    (50,0.007958406978349661)
+    (60,0.00718693548235823)
+    (70,0.006443132924647207)
+    (80,0.00587162950866858)
+    (90,0.0055866537255241135)
+    (100,0.005047951701312448) <- a good choice k=100
+    (110,0.004503811904538471)
+    (120,0.004488682966870424)
+    (130,0.003932718791304399)
+    (140,0.0037021398104917845)
+    (150,0.0034968242624846546)
+    (160,0.0035601552659101396)
+    (170,0.0028780955518806126)
+    (180,0.002975197553917668)
+    (190,0.0028227377594864703)
+    (200,0.00285000126640845)
+    time taken: 471.371508456 sec.
+     */
+
+    /* for 50000 entries from 30 to 200 by 10 with categorical features
+    (30,0.257209030174202)
+    (40,0.21222868244047066)
+    (50,0.1665028248500492)
+    (60,0.11939511286991407)
+    (70,0.08042702751191264)
+    (80,0.05979275529310292)
+    (90,0.035696475917705875)
+    (100,0.02420220463163872)
+    (110,0.02276925610689223)
+    (120,0.013597206581047351)
+    (130,0.014664051732393105)
+    (140,0.010025083655799226)
+    (150,0.00946897545564469) <-- the book takes this because 160 (in the book) fails to get a better cluster
+    (160,0.009063945656319313)
+    (170,0.007582507748014988)
+    (180,0.007772404365208013)
+    (190,0.006981890784321001)
+    (200,0.006696254493897853)
+
+    //the same after refactoring
+    (30,0.25703630897563673)
+    (40,0.21385255776203335)
+    (50,0.17149528845530898)
+    (60,0.13581646091407695)
+    (70,0.09094145599525512)
+    (80,0.06277019016368193)
+    (90,0.029908064311320294)
+    (100,0.0268375510558802)
+    (110,0.023359410305571954)
+    (120,0.01757965547167833)
+    (130,0.013524272805127583)
+    (140,0.011515834594105061)
+    (150,0.010654533751611347)
+    (160,0.009697304026422255)
+    (170,0.008973568906119033)
+    (180,0.008062535090005613)
+    (190,0.007525899422738656)
+    (200,0.006911416534204392)
+    time taken: 450.349361484 sec.
+
+     */
+
+
+    // saveDataWithKmeans (normalizedData, 100)
+
+
+    // using label with entropy (pag. 95)
+    // better for scoring -> weighted average of entropy
+
+    def clusteringMeans(data: RDD[(String, Vector)], k: Int) = {
+      val model: KMeansModel = runKmeans(data.values, k)
+      val distances = data.mapValues(datum => distanceToCentroid(datum, model)) //RDD [Double]
+      distances.values.mean
+    }
+
+    def clusteringEntropyScore(data: RDD[(String, Vector)], k: Int) = {
+      val model: KMeansModel = runKmeans(data.values, k)
+      val labelsAndCluster= data.mapValues(model.predict) //RDD [(String,Int)]
+      val clusterAndLabels = labelsAndCluster.map (_.swap) //RDD [(Int,String)]
+      val labelsInCluster = clusterAndLabels.groupByKey().values //RDD[(Int,Iterable[String])] --> .values RDD[Iterable[String]]
+      labelsInCluster =
+    }
+
+    (30 to 200 by 10).par.map(k => (k, clusteringEntropyScore(normalizedData, k))).toList.foreach(println)
+
+
+    val estimatedNanoTime = (nanoTime - startNanoTime) / 1000000000.0
+    println(s"time taken: $estimatedNanoTime sec.")
 
   }
-
 
 
 }
